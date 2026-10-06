@@ -4,10 +4,15 @@
 //   https://x.onrender.com/api/   -> https://x.onrender.com/api
 //   (bo'sh)                       -> /api  (lokal Vite proxy)
 function resolveBase() {
-  let base = String(import.meta.env.VITE_API_URL || '').trim()
+  let base = String(import.meta.env.VITE_BACKEND_URL || '').trim()
+
   if (!base) return '/api'
-  base = base.replace(/\/+$/, '')              // oxiridagi slesh(lar)ni olib tashlash
-  if (!/\/api$/.test(base)) base += '/api'      // /api yetishmasa qo'shish
+
+  base = base.replace(/\/+$/, '')
+
+  if (!/\/api$/.test(base)) {
+    base += '/api'
+  }
   return base
 }
 const BASE = resolveBase()
