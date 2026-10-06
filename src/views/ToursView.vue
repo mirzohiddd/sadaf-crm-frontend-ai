@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, watch } from 'vue'
 import MetricTile from '@/components/MetricTile.vue'
 import ModalDialog from '@/components/ModalDialog.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -9,7 +9,8 @@ import ToolbarButton from '@/components/ToolbarButton.vue'
 import TablePagination from '@/components/TablePagination.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import { db, toursApi } from '@/store'
-import { countries, tourStatuses, countryFlags } from '@/data/mock.js'
+import { tourStatuses, countryFlags } from '@/data/mock.js'
+import { tourDestinations, destinationFlags, TOUR_TYPES } from '@/data/countries.js'
 import { money, exportCsv } from '@/utils/format.js'
 
 const PER_PAGE = 6
@@ -27,6 +28,19 @@ const filtered = computed(() => {
       (!statusFilter.value || t.status === statusFilter.value)
   })
 })
+
+// ——— Yo'nalishlar ———
+// Asosiy ro'yxat — data/countries.js. Avval boshqa nom bilan saqlangan turlarning
+// yo'nalishi (masalan "Yevropa") ham filtr va tahrirlashda yo'qolmasligi uchun
+// ro'yxat oxiriga qo'shiladi — takrorlanmasdan.
+const flagOf = (country) => destinationFlags[country] || countryFlags[country] || ''
+const extraCountries = (names) => {
+  const known = new Set(tourDestinations.map((d) => d.name))
+  return [...new Set(names.filter((c) => c && !known.has(c)))].map((name) => ({ name, flag: flagOf(name) }))
+}
+const destinationOptions = computed(() => [...tourDestinations, ...extraCountries(db.tours.map((t) => t.country))])
+const formDestinationOptions = computed(() => [...destinationOptions.value, ...extraCountries([form.country])
+  .filter((c) => !destinationOptions.value.some((d) => d.name === c.name))])
 
 const paged = computed(() => filtered.value.slice((page.value - 1) * PER_PAGE, page.value * PER_PAGE))
 
@@ -51,7 +65,11 @@ const seatWidth = (t) => Math.min(100, (Number(t.seats) / 20) * 100) + '%'
 
 // ——— Modal / forma ———
 
-const emptyForm = () => ({ id: null, name: '', country: '', days: '', price: '', seats: '', status: '', description: '', image: '' })
+const emptyForm = () => ({
+  id: null, tourType: 'Doimiy', name: '', country: '', days: '', price: '', extraPrice: '', seats: '', status: '',
+  startDate: '', endDate: '', description: '', image: ''
+})
+const isDated = computed(() => form.tourType === 'Muddatli')
 
 const modalOpen = ref(false)
 const form = reactive(emptyForm())
@@ -68,11 +86,37 @@ function openCreate() {
 }
 
 function openEdit(row) {
-  Object.assign(form, { ...row })
+  // Avval bo'sh forma — oldingi turdan qolgan maydonlar (rasm, sana) aralashmasin.
+  // Tur turi saqlanmagan eski turlar "Doimiy" hisoblanadi.
+  Object.assign(form, emptyForm(), { ...row }, {
+    tourType: row.tourType === 'Muddatli' ? 'Muddatli' : 'Doimiy',
+    extraPrice: row.extraPrice ?? '',
+    startDate: row.startDate || '',
+    endDate: row.endDate || ''
+  })
   imageName.value = ''
   clearErrors()
   modalOpen.value = true
 }
+
+function setTourType(type) {
+  form.tourType = type
+  if (type !== 'Muddatli') {
+    form.startDate = ''
+    form.endDate = ''
+    delete errors.startDate
+    delete errors.endDate
+  }
+}
+
+// Ikkala sana tanlansa — davomiylik (kun) avtomatik hisoblanadi (keyin qo'lda o'zgartirsa bo'ladi).
+watch(() => [form.startDate, form.endDate], ([start, end]) => {
+  if (!isDated.value || !start || !end) return
+  const days = Math.round((new Date(end) - new Date(start)) / 86400000) + 1
+  if (days > 0) form.days = days
+})
+
+const shortDate = (iso) => (iso ? iso.split('-').reverse().join('.') : '')
 
 function onImagePick(e) {
   const file = e.target.files?.[0]
@@ -106,6 +150,14 @@ function validate() {
   if (!form.country) errors.country = "Yo'nalishni tanlang."
   if (!(Number(form.days) > 0)) errors.days = 'Davomiylikni kun hisobida kiriting.'
   if (!(Number(form.price) > 0)) errors.price = 'Narxni kiriting.'
+  if (form.extraPrice !== '' && form.extraPrice !== null && !(Number(form.extraPrice) >= 0)) {
+    errors.extraPrice = "Qo'shimcha narx manfiy bo'lmasin."
+  }
+  if (isDated.value) {
+    if (!form.startDate) errors.startDate = 'Boshlanish sanasini tanlang.'
+    if (!form.endDate) errors.endDate = 'Tugash sanasini tanlang.'
+    else if (form.startDate && form.endDate < form.startDate) errors.endDate = "Tugash sanasi boshlanishdan oldin bo'lmasin."
+  }
   if (form.seats === '' || Number(form.seats) < 0) errors.seats = "Bo'sh joylar sonini kiriting."
   if (!form.status) errors.status = 'Holatni tanlang.'
   return !Object.keys(errors).length
@@ -113,7 +165,16 @@ function validate() {
 
 function save() {
   if (!validate()) return
-  const payload = { ...form, days: Number(form.days), price: Number(form.price), seats: Number(form.seats) }
+  const payload = {
+    ...form,
+    days: Number(form.days),
+    price: Number(form.price),
+    seats: Number(form.seats),
+    extraPrice: form.extraPrice === '' || form.extraPrice === null ? null : Number(form.extraPrice),
+    // Doimiy turda sanalar saqlanmaydi (tahrirlashda ham tozalanadi)
+    startDate: isDated.value ? form.startDate : '',
+    endDate: isDated.value ? form.endDate : ''
+  }
   form.id ? toursApi.update(payload) : toursApi.add(payload)
   modalOpen.value = false
 }
@@ -157,7 +218,7 @@ const exportColumns = [
 
       <select v-model="countryFilter" class="field w-auto min-w-[160px]" @change="page = 1">
         <option value="">Barcha yo'nalishlar</option>
-        <option v-for="c in countries" :key="c" :value="c">{{ c }}</option>
+        <option v-for="c in destinationOptions" :key="c.name" :value="c.name">{{ c.flag }} {{ c.name }}</option>
       </select>
 
       <select v-model="statusFilter" class="field w-auto min-w-[150px]" @change="page = 1">
@@ -183,7 +244,7 @@ const exportColumns = [
           <span v-if="t.image" class="absolute inset-0 bg-gradient-to-t from-slate-900/50 to-transparent" />
 
           <span class="absolute left-3 top-3 rounded-lg bg-white/90 px-2.5 py-1 text-xs font-medium text-slate-700 backdrop-blur">
-            {{ countryFlags[t.country] }} {{ t.country }}
+            {{ flagOf(t.country) }} {{ t.country }}
           </span>
 
           <span class="absolute right-3 top-3">
@@ -258,6 +319,21 @@ const exportColumns = [
     <!-- Yangi / tahrirlash -->
     <ModalDialog :open="modalOpen" :title="form.id ? 'Turni tahrirlash' : 'Yangi tur qo\'shish'"
                  @close="modalOpen = false" @submit="save">
+      <!-- Tur turi -->
+      <div class="mb-5">
+        <p class="mb-1.5 text-sm font-medium text-slate-700">Tur turi <span class="text-rose-500">*</span></p>
+        <div class="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200" role="radiogroup" aria-label="Tur turi">
+          <button v-for="(t, i) in TOUR_TYPES" :key="t.value" type="button" role="radio"
+                  :aria-checked="form.tourType === t.value"
+                  class="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors"
+                  :class="[i ? 'border-l border-slate-200' : '',
+                           form.tourType === t.value ? 'bg-blue-50 text-blue-700' : 'bg-white text-slate-600 hover:bg-slate-50']"
+                  @click="setTourType(t.value)">
+            <AppIcon :name="t.value === 'Muddatli' ? 'calendar' : 'globe'" class="h-4 w-4" /> {{ t.label }}
+          </button>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <FormField label="Tur nomi" required :error="errors.name">
           <input v-model="form.name" class="field" placeholder="Masalan: Bangkok + Pattaya" />
@@ -266,9 +342,19 @@ const exportColumns = [
         <FormField label="Yo'nalish" required :error="errors.country">
           <select v-model="form.country" class="field">
             <option value="" disabled>Yo'nalishni tanlang</option>
-            <option v-for="c in countries" :key="c" :value="c">{{ c }}</option>
+            <option v-for="c in formDestinationOptions" :key="c.name" :value="c.name">{{ c.flag }} {{ c.name }}</option>
           </select>
         </FormField>
+
+        <template v-if="isDated">
+          <FormField label="Boshlanish sanasi" required :error="errors.startDate">
+            <input v-model="form.startDate" type="date" class="field" />
+          </FormField>
+
+          <FormField label="Tugash sanasi" required :error="errors.endDate">
+            <input v-model="form.endDate" type="date" :min="form.startDate || undefined" class="field" />
+          </FormField>
+        </template>
 
         <FormField label="Davomiyligi (kun)" required :error="errors.days">
           <input v-model="form.days" type="number" min="1" class="field" placeholder="Masalan: 8" />
@@ -276,6 +362,10 @@ const exportColumns = [
 
         <FormField label="Narxi (USD)" required :error="errors.price">
           <input v-model="form.price" type="number" min="0" class="field" placeholder="Masalan: 1850" />
+        </FormField>
+
+        <FormField label="Qo'shimcha narx (USD)" :error="errors.extraPrice" hint="Agar mavjud bo'lsa">
+          <input v-model="form.extraPrice" type="number" min="0" class="field" placeholder="Masalan: 150" />
         </FormField>
 
         <FormField label="Bo'sh joylar soni" required :error="errors.seats">
@@ -328,9 +418,15 @@ const exportColumns = [
           </div>
         </div>
         <dl class="grid grid-cols-2 gap-4 text-sm">
-          <div><dt class="text-slate-500">Yo'nalish</dt><dd class="font-medium text-slate-900">{{ countryFlags[viewing.country] }} {{ viewing.country }}</dd></div>
+          <div><dt class="text-slate-500">Tur turi</dt><dd class="font-medium text-slate-900">{{ viewing.tourType === 'Muddatli' ? 'Muddatli tur' : 'Doimiy tur' }}</dd></div>
+          <div><dt class="text-slate-500">Yo'nalish</dt><dd class="font-medium text-slate-900">{{ flagOf(viewing.country) }} {{ viewing.country }}</dd></div>
+          <div v-if="viewing.tourType === 'Muddatli' && viewing.startDate" class="col-span-2">
+            <dt class="text-slate-500">Sanalar</dt>
+            <dd class="font-medium text-slate-900">{{ shortDate(viewing.startDate) }} — {{ shortDate(viewing.endDate) }}</dd>
+          </div>
           <div><dt class="text-slate-500">Davomiyligi</dt><dd class="font-medium text-slate-900">{{ viewing.days }} kun</dd></div>
           <div><dt class="text-slate-500">Narxi</dt><dd class="font-medium text-slate-900">{{ money(viewing.price) }}</dd></div>
+          <div v-if="viewing.extraPrice"><dt class="text-slate-500">Qo'shimcha narx</dt><dd class="font-medium text-slate-900">{{ money(viewing.extraPrice) }}</dd></div>
           <div><dt class="text-slate-500">Bo'sh joy</dt><dd class="font-medium text-slate-900">{{ viewing.seats }} ta</dd></div>
         </dl>
         <p class="text-sm text-slate-600">{{ viewing.description || 'Tavsif kiritilmagan.' }}</p>

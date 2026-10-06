@@ -17,7 +17,8 @@ export default {
         canvas: '#f4f7fb'
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'Segoe UI', 'sans-serif']
+        // 'Twemoji Country Flags' faqat bayroq belgilarini chizadi (unicode-range) — main.js
+        sans: ['Twemoji Country Flags', 'Inter', 'system-ui', 'Segoe UI', 'sans-serif']
       },
       boxShadow: {
         card: '0 1px 2px rgba(16,24,40,.04), 0 8px 24px rgba(16,24,40,.05)'
