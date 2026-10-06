@@ -5,7 +5,10 @@ import AppIcon from './AppIcon.vue'
 const props = defineProps({
   open: Boolean,
   title: String,
-  wide: { type: Boolean, default: false }
+  wide: { type: Boolean, default: false },
+  // Ixtiyoriy: asosiy tugma matni va holati (standart — avvalgidek "Saqlash")
+  submitLabel: { type: String, default: 'Saqlash' },
+  submitDisabled: { type: Boolean, default: false }
 })
 const emit = defineEmits(['close', 'submit'])
 
@@ -45,8 +48,8 @@ onUnmounted(() => {
           <footer class="flex shrink-0 gap-3 border-t border-slate-100 px-4 py-3 sm:justify-end sm:px-6 sm:py-4">
             <button class="flex-1 rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:flex-none"
                     @click="$emit('close')">Bekor qilish</button>
-            <button class="flex-1 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 sm:flex-none"
-                    @click="$emit('submit')">Saqlash</button>
+            <button class="flex-1 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
+                    :disabled="submitDisabled" @click="$emit('submit')">{{ submitLabel }}</button>
           </footer>
         </div>
       </div>

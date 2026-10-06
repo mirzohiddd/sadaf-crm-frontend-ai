@@ -11,7 +11,8 @@ import RowActions from '@/components/RowActions.vue'
 import ToolbarButton from '@/components/ToolbarButton.vue'
 import TablePagination from '@/components/TablePagination.vue'
 import AppIcon from '@/components/AppIcon.vue'
-import { db, employeesApi, can } from '@/store'
+import RebalanceLeads from '@/components/RebalanceLeads.vue'
+import { db, employeesApi, can, isSuperAdmin } from '@/store'
 import { workShifts, crmRoles, roleLabelOf } from '@/data/mock.js'
 import { exportCsv } from '@/utils/format.js'
 
@@ -233,7 +234,9 @@ const exportColumns = [
           <option v-for="p in positionOptions" :key="p" :value="p">{{ p }}</option>
         </select>
 
-        <div class="ml-auto flex gap-3">
+        <div class="ml-auto flex flex-wrap gap-3">
+          <!-- Faqat Bosh menejer: leadlarni faol menejerlar orasida qayta taqsimlash -->
+          <RebalanceLeads v-if="isSuperAdmin" />
           <ToolbarButton icon="download" @click="exportCsv('hodimlar.csv', exportColumns, filtered)">Export</ToolbarButton>
           <ToolbarButton v-if="can('employees', 'write')" icon="plus" variant="primary"
                          @click="openCreate">Yangi hodim</ToolbarButton>

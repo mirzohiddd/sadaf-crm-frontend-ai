@@ -29,7 +29,10 @@ export const leadsApi = {
   markSeen: (id) => http.patch(`/leads/${id}/seen`),
   remove: (id) => http.del(`/leads/${id}`),
   addComment: (id, text) => http.post(`/leads/${id}/comments`, { text }),
-  removeComment: (id, commentId) => http.del(`/leads/${id}/comments/${commentId}`)
+  removeComment: (id, commentId) => http.del(`/leads/${id}/comments/${commentId}`),
+  // Barcha leadlarni faol menejerlar orasida round-robin qayta taqsimlash (faqat Bosh menejer).
+  // dryRun: true — hech narsa saqlamasdan natijani oldindan ko'rsatadi.
+  rebalance: (dryRun = false) => http.post('/leads/rebalance', { dryRun })
 }
 export const clientsApi = {
   list: () => http.get('/clients'),
