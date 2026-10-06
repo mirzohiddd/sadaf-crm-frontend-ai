@@ -22,7 +22,7 @@ let handler = () => {}
 function wsBase() {
   const explicit = String(import.meta.env.VITE_WS_URL || '').trim()
   if (explicit) return explicit.replace(/\/+$/, '')
-  const api = String(import.meta.env.VITE_API_URL || '').trim()
+  const api = String(import.meta.env.VITE_BACKEND_URL || '').trim()
   if (/^https?:\/\//i.test(api)) {
     const origin = api.replace(/\/+$/, '').replace(/\/api$/, '')
     return origin.replace(/^http/i, 'ws') + '/ws'
