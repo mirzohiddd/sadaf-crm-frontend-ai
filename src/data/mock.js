@@ -33,6 +33,8 @@ export const leadStageList = [
   { name: "To'lov qilindi",   head: 'bg-violet-600',  edge: 'border-l-violet-600',  icon: 'dollar' },
   { name: 'Bron tasdiqlandi', head: 'bg-emerald-600', edge: 'border-l-emerald-600', icon: 'check-circle' },
   { name: 'Bekor qilindi',    head: 'bg-orange-500',  edge: 'border-l-orange-500',  icon: 'x-circle' },
+  // BAZA — CRM ichidagi oddiy bosqich (leads.json), "Sifatsiz lead"ning chap tomonida
+  { name: 'Baza',             head: 'bg-indigo-600',  edge: 'border-l-indigo-600',  icon: 'database' },
   { name: 'Sifatsiz lead',    head: 'bg-slate-500',   edge: 'border-l-slate-500',   icon: 'filter' }
 ]
 

@@ -14,9 +14,8 @@ import LeadCallsList from '@/components/callcenter/LeadCallsList.vue'
 import {
   db, leadsApi, moveLead, isSuperAdmin, markLeadSeen, leadCounts, groupLeadsByStage, stageKey,
   leadReminders, loadLeadReminders, clearLeadReminders, leadRemindersApi,
-  openCallCenter, importBazaLead
+  openCallCenter
 } from '@/store'
-import { leadsApi as leadsHttp } from '@/api'
 import { leadStageList, leadStages, leadSourceNames } from '@/data/mock.js'
 import { todayUz, money, exportCsv } from '@/utils/format.js'
 
@@ -75,65 +74,6 @@ const stageGroups = computed(() => groupLeadsByStage(filtered.value))
 const NO_LEADS = Object.freeze([])
 const byStage = (stage) => stageGroups.value.get(stageKey(stage)) || NO_LEADS
 const sumOf = (stage) => byStage(stage).reduce((s, l) => s + Number(l.amount || 0), 0)
-
-// ——— BAZA ustuni (PostgreSQL, backend: GET /api/leads/baza) ———
-// "Sifatsiz lead" ustunining darhol chap tomonida turadi. Bu bosqich emas —
-// bazadagi, CRM'da hali yo'q leadlar. Kartani boshqa ustunga sudrab
-// o'tkazilsa CRM leadiga aylanadi va BAZA'dan yo'qoladi.
-const BAZA_COLUMN = Object.freeze({
-  name: 'Baza', baza: true, head: 'bg-indigo-600', edge: 'border-l-indigo-600', icon: 'database'
-})
-const kanbanColumns = computed(() => {
-  const cols = [...leadStageList]
-  const i = cols.findIndex((c) => stageKey(c.name) === stageKey('Sifatsiz lead'))
-  cols.splice(i === -1 ? cols.length : i, 0, BAZA_COLUMN)
-  return cols
-})
-
-const baza = reactive({ enabled: null, items: [], loading: false, error: '', truncated: false })
-const importing = reactive(new Set())
-let bazaSeq = 0
-
-async function loadBaza() {
-  const seq = ++bazaSeq
-  baza.loading = true
-  try {
-    const { from, to } = activeRange.value
-    const res = await leadsHttp.baza({ dateFrom: from, dateTo: to })
-    if (seq !== bazaSeq) return // eskirgan javob (filtr o'zgarib ulgurdi)
-    Object.assign(baza, { enabled: !!res?.enabled, items: res?.items || [], truncated: !!res?.truncated, error: '' })
-  } catch (err) {
-    if (seq !== bazaSeq) return
-    Object.assign(baza, { items: [], error: err?.message || "BAZA'ni yuklab bo'lmadi" })
-  } finally {
-    if (seq === bazaSeq) baza.loading = false
-  }
-}
-
-// Qidiruv va manba filtri BAZA'ga ham qo'llanadi (sana — backendda)
-const bazaList = computed(() => baza.items.filter((b) => matchesSearch(b) && !importing.has(b.id)))
-
-let bazaTimer = null
-const scheduleBaza = (delay = 250) => { clearTimeout(bazaTimer); bazaTimer = setTimeout(loadBaza, delay) }
-watch(activeRange, () => scheduleBaza(), { deep: true })
-// CRM leadlari o'zgarsa (yangi lead, import, o'chirish) — dublikatlar qayta hisoblanadi
-watch(() => db.leads, () => scheduleBaza(400))
-let bazaPoll = null
-onMounted(() => {
-  loadBaza()
-  bazaPoll = setInterval(() => { if (!document.hidden) loadBaza() }, 60000)
-})
-onBeforeUnmount(() => { clearInterval(bazaPoll); clearTimeout(bazaTimer) })
-
-async function importFromBaza(item, stage) {
-  if (!item || importing.has(item.id)) return
-  importing.add(item.id) // darhol ustundan yo'qolsin
-  openMenu.value = null
-  const row = await importBazaLead(item.id, stage)
-  importing.delete(item.id)
-  if (row) baza.items = baza.items.filter((b) => b.id !== item.id)
-  scheduleBaza(0)
-}
 
 const totals = computed(() => {
   const all = db.leads
@@ -238,23 +178,11 @@ async function save() {
 // ——— Bosqichni ko'chirish ———
 
 const dragId = ref(null)
-const dragBaza = ref(null) // BAZA'dan sudralayotgan yozuv
 const dragOver = ref(null)
 
-function onDragOver(e, col) {
-  // BAZA — faqat manba: unga lead tashlab bo'lmaydi
-  if (col.baza) return
-  e.preventDefault()
-  dragOver.value = col.name
-}
-
-function onDrop(col) {
-  if (!col.baza) {
-    if (dragBaza.value) importFromBaza(dragBaza.value, col.name)
-    else if (dragId.value != null) moveLead(dragId.value, col.name)
-  }
+function onDrop(stage) {
+  if (dragId.value != null) moveLead(dragId.value, stage)
   dragId.value = null
-  dragBaza.value = null
   dragOver.value = null
 }
 
@@ -488,115 +416,24 @@ const exportColumns = computed(() => [
     <!-- Kanban -->
     <div v-if="view === 'kanban'" class="overflow-x-auto pb-3">
       <div class="flex min-w-max gap-3">
-        <section v-for="col in kanbanColumns" :key="col.name" class="flex w-[264px] shrink-0 flex-col sm:w-[272px]"
-          :data-column="col.baza ? 'baza' : col.name"
-          @dragover="onDragOver($event, col)" @dragleave="dragOver = null" @drop="onDrop(col)">
+        <section v-for="col in leadStageList" :key="col.name" class="flex w-[264px] shrink-0 flex-col sm:w-[272px]"
+          :data-column="col.name"
+          @dragover.prevent="dragOver = col.name" @dragleave="dragOver = null" @drop="onDrop(col.name)">
           <header :class="col.head" class="flex items-center gap-2 rounded-t-xl px-3.5 py-2.5 text-white">
             <AppIcon :name="col.icon" class="h-4 w-4 shrink-0 opacity-90" />
             <h2 class="truncate text-[13px] font-semibold uppercase tracking-wide">{{ col.name }}</h2>
             <span class="ml-auto rounded-md bg-black/20 px-1.5 py-0.5 text-xs font-semibold">
-              {{ col.baza ? bazaList.length : byStage(col.name).length }}
+              {{ byStage(col.name).length }}
             </span>
-            <button v-if="col.baza" type="button" title="BAZA'ni yangilash" aria-label="BAZA'ni yangilash"
-              class="rounded-md p-0.5 text-white/80 hover:bg-black/20 hover:text-white" @click.stop="loadBaza">
-              <AppIcon name="refresh" class="h-3.5 w-3.5" :class="baza.loading ? 'animate-spin' : ''" />
-            </button>
           </header>
 
           <div class="border-x border-slate-200 bg-white px-3 pb-2 pt-3 text-center">
-            <span v-if="col.baza"
-              class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700">
-              <AppIcon name="database" class="h-3.5 w-3.5" /> PostgreSQL
-            </span>
-            <span v-else class="inline-block rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-800">
+            <span class="inline-block rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-800">
               {{ money(sumOf(col.name)) }}
             </span>
           </div>
 
-          <!-- BAZA ustuni tanasi -->
-          <div v-if="col.baza"
-            class="flex-1 space-y-2.5 rounded-b-xl border-x border-b border-slate-200 bg-indigo-50/40 p-2.5">
-            <p v-if="baza.enabled === false"
-              class="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-4 text-center text-xs text-slate-500">
-              PostgreSQL ulanmagan. Backend <code class="font-mono">.env</code> faylida
-              <code class="font-mono">DATABASE_URL</code> ni bering.
-            </p>
-            <p v-else-if="baza.error"
-              class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-3 text-center text-xs text-rose-700">
-              {{ baza.error }}
-              <button class="mt-1.5 block w-full font-semibold underline" @click.stop="loadBaza">Qayta urinish</button>
-            </p>
-            <p v-else-if="baza.enabled === null && baza.loading" class="py-4 text-center text-xs text-slate-400">
-              Yuklanmoqda...
-            </p>
-            <p v-else-if="!bazaList.length" class="py-4 text-center text-xs text-slate-400">
-              {{ hasDateFilter ? "Bu oraliqda bazada lead yo'q" : "Bazada yangi lead yo'q" }}
-            </p>
-
-            <article v-for="b in bazaList" :key="'baza-' + b.id" draggable="true"
-              class="animate-pop-in cursor-grab rounded-lg border border-l-4 border-slate-200 bg-white p-3 shadow-sm transition hover:shadow-md active:cursor-grabbing"
-              :class="col.edge" title="Bosqichga o'tkazish uchun kerakli ustunga sudrang"
-              @dragstart="dragBaza = b; dragId = null" @dragend="dragBaza = null; dragOver = null">
-              <div class="flex items-start justify-between gap-2">
-                <p class="text-xs font-medium text-slate-400">{{ ['BAZA #' + b.id, [b.date, b.time].filter(Boolean).join(' ')].filter(Boolean).join(' · ') }}</p>
-
-                <div class="relative">
-                  <button class="rounded-md p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                    aria-label="Amallar" @click.stop="openMenu = openMenu === 'baza-' + b.id ? null : 'baza-' + b.id">
-                    <AppIcon name="dots" class="h-4 w-4" />
-                  </button>
-                  <div v-if="openMenu === 'baza-' + b.id"
-                    class="absolute right-0 z-20 mt-1 w-52 rounded-xl border border-slate-100 bg-white py-1.5 shadow-xl"
-                    @click.stop>
-                    <p class="px-4 pb-1 pt-1 text-xs font-medium uppercase text-slate-400">Leadlarga qo'shish</p>
-                    <button v-for="s in leadStages" :key="s"
-                      class="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-                      @click="importFromBaza(b, s)">{{ s }}</button>
-                  </div>
-                </div>
-              </div>
-
-              <p class="mt-1.5 text-sm font-medium text-blue-700">{{ b.name || '—' }}</p>
-              <p class="text-xs text-slate-500">{{ b.phone || '—' }}</p>
-
-              <dl v-if="b.tour || b.city || b.comment" class="mt-2.5 space-y-1.5 border-t border-slate-100 pt-2.5 text-xs">
-                <div v-if="b.tour">
-                  <dt class="text-slate-400">Tur</dt>
-                  <dd class="text-slate-700">{{ b.tour }}</dd>
-                </div>
-                <div v-if="b.city">
-                  <dt class="text-slate-400">Shahar</dt>
-                  <dd class="text-slate-700">{{ b.city }}</dd>
-                </div>
-                <div v-if="b.comment">
-                  <dt class="text-slate-400">Izoh</dt>
-                  <dd class="line-clamp-2 text-slate-700">{{ b.comment }}</dd>
-                </div>
-              </dl>
-
-              <div class="mt-2.5 flex items-center justify-between border-t border-slate-100 pt-2.5">
-                <SourceTag v-if="b.source" :source="b.source" />
-                <span v-else class="text-[11px] font-medium text-indigo-500">Baza</span>
-                <span v-if="b.phone" class="flex gap-1">
-                  <a :href="telLink(b.phone)"
-                    class="grid h-7 w-7 place-items-center rounded-md bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
-                    title="Qo'ng'iroq qilish" @click.stop>
-                    <AppIcon name="phone" class="h-3.5 w-3.5" />
-                  </a>
-                  <a :href="tgLink(b)" target="_blank" rel="noopener"
-                    class="grid h-7 w-7 place-items-center rounded-md bg-sky-50 text-sky-600 hover:bg-sky-100"
-                    title="Telegramda yozish" @click.stop>
-                    <AppIcon name="telegram" class="h-3.5 w-3.5" />
-                  </a>
-                </span>
-              </div>
-            </article>
-            <p v-if="baza.truncated" class="text-center text-[11px] text-slate-400">
-              Faqat eng yangi {{ bazaList.length }} ta ko'rsatildi — sana filtri bilan toraytiring.
-            </p>
-          </div>
-
-          <div v-else
+          <div
             class="flex-1 space-y-2.5 rounded-b-xl border-x border-b border-slate-200 bg-slate-50/80 p-2.5 transition-colors"
             :class="dragOver === col.name ? 'bg-blue-50 ring-2 ring-inset ring-blue-300' : ''">
             <button
@@ -608,7 +445,7 @@ const exportColumns = computed(() => [
             <article v-for="lead in byStage(col.name)" :key="lead.id" draggable="true"
               class="animate-pop-in cursor-pointer rounded-lg border border-l-4 border-slate-200 bg-white p-3 shadow-sm transition hover:shadow-md active:cursor-grabbing"
               :class="[col.edge, selected === lead.id ? 'ring-2 ring-blue-500 ring-offset-1' : '']"
-              @dragstart="dragId = lead.id; dragBaza = null" @click.stop="openDetail(lead)">
+              @dragstart="dragId = lead.id" @click.stop="openDetail(lead)">
               <div class="flex items-start justify-between gap-2">
                 <p class="text-xs font-medium text-slate-400">#{{ lead.id }} · {{ lead.date }}</p>
 

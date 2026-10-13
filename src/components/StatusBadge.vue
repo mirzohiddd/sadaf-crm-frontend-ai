@@ -9,6 +9,7 @@ const map = {
   "To'lov qilindi":   'bg-sky-50 text-sky-700',
   'Bron tasdiqlandi': 'bg-emerald-50 text-emerald-700',
   'Bekor qilindi':    'bg-rose-50 text-rose-700',
+  'Baza':             'bg-indigo-100 text-indigo-700',
   'Sifatsiz lead':    'bg-slate-100 text-slate-600',
   'Faol':        'bg-emerald-50 text-emerald-700',
   'Kutilmoqda':  'bg-slate-100 text-slate-600',
