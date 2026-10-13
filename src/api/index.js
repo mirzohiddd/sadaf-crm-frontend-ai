@@ -20,7 +20,8 @@ export const employeesApi = {
   remove: (id) => http.del(`/employees/${id}`)
 }
 export const leadsApi = {
-  list: () => http.get('/leads'),
+  // params (ixtiyoriy): { dateFrom, dateTo } — lead HAQIQIY kelgan sana (YYYY-MM-DD)
+  list: (params) => http.get('/leads', params),
   stages: () => http.get('/leads/stages'),
   newCount: () => http.get('/leads/new-count'),
   create: (payload) => http.post('/leads', payload),
@@ -32,7 +33,11 @@ export const leadsApi = {
   removeComment: (id, commentId) => http.del(`/leads/${id}/comments/${commentId}`),
   // Barcha leadlarni faol menejerlar orasida round-robin qayta taqsimlash (faqat Bosh menejer).
   // dryRun: true — hech narsa saqlamasdan natijani oldindan ko'rsatadi.
-  rebalance: (dryRun = false) => http.post('/leads/rebalance', { dryRun })
+  rebalance: (dryRun = false) => http.post('/leads/rebalance', { dryRun }),
+  // BAZA ustuni (PostgreSQL): takrorlanmaydigan, CRM'da hali yo'q leadlar
+  baza: (params) => http.get('/leads/baza', params),
+  // BAZA yozuvini tanlangan bosqichda CRM leadiga aylantirish
+  importBaza: (id, stage) => http.post(`/leads/baza/${encodeURIComponent(id)}/import`, { stage })
 }
 export const clientsApi = {
   list: () => http.get('/clients'),

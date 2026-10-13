@@ -373,6 +373,21 @@ export async function moveLead(id, stage) {
   }
 }
 
+/** BAZA (PostgreSQL) kartasini Kanbandagi bosqichga o'tkazish → CRM lead. */
+export async function importBazaLead(bazaId, stage) {
+  try {
+    const row = await api.leadsApi.importBaza(bazaId, stage)
+    upsert('leads', row)
+    await refresh(['activity', 'sales'])
+    loadDashboard()
+    return row
+  } catch (err) {
+    // 409 — lead CRM'da allaqachon bor: ro'yxatni yangilab qo'yamiz
+    if (err?.status === 409) refresh(['leads'])
+    return fail(err)
+  }
+}
+
 // ——— Lead kommentariyalari (formadagi 11-bo'lim) ———
 
 /**

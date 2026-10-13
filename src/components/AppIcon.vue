@@ -177,6 +177,9 @@ defineProps({ name: { type: String, required: true } })
     <template v-else-if="name === 'stop'">
       <rect x="6" y="6" width="12" height="12" rx="2" />
     </template>
+    <template v-else-if="name === 'database'">
+      <ellipse cx="12" cy="5.5" rx="7.5" ry="2.8" /><path d="M4.5 5.5v6.5c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8V5.5" /><path d="M4.5 12v6.5c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8V12" />
+    </template>
     <template v-else-if="name === 'swap'">
       <path d="M7 4 3 8l4 4" /><path d="M3 8h13" /><path d="m17 20 4-4-4-4" /><path d="M21 16H8" />
     </template>
