@@ -243,6 +243,17 @@ async function main() {
     }
   }
 
+  // Ro'yxatdan olib tashlangan eski videolar manifestdan chiqariladi (CRM ularni so'ramaydi)
+  if (!opts.only) {
+    const known = new Set((data.videos || []).map((v) => v.id))
+    const stale = Object.keys(manifest.videos).filter((id) => !known.has(id))
+    for (const id of stale) delete manifest.videos[id]
+    if (stale.length) {
+      log(yellow(`\nEski videolar manifestdan olib tashlandi: ${stale.join(', ')}`))
+      log(dim(`  Ularning fayllarini xohlasangiz o'chirishingiz mumkin: ${stale.map((id) => `${id}.mp4, ${id}-480.mp4, ${id}.jpg`).join('; ')}`))
+    }
+  }
+
   manifest.generatedAt = new Date().toISOString()
   manifest.note = 'npm run videos:fetch yaratgan. CRM faqat shu ro\'yxatdagi lokal videolarni ishlatadi.'
   writeFileSync(MANIFEST, JSON.stringify(manifest, null, 2) + '\n')
@@ -255,8 +266,10 @@ async function main() {
   if (failed.length) {
     console.error(red(`\nMuvaffaqiyatsiz (${failed.length} ta) — bular Mixkit serveridan o'qilishda davom etadi:`))
     for (const f of failed) console.error(red(`  • ${f.v.id}: ${f.error}`))
-    console.error(yellow("\nMaslahat: internetni tekshiring va qayta ishga tushiring:  npm run videos:fetch -- --only " +
-      failed.map((f) => f.v.id).join(',')))
+    const ids = failed.map((f) => f.v.id).join(',')
+    console.error(yellow(opts.source
+      ? `\nMaslahat: yetishmagan fayllarni ${opts.source} papkasiga <id>.mp4 nomi bilan qo'ying va qayta ishga tushiring.`
+      : `\nMaslahat: internetni tekshiring va qayta ishga tushiring:  npm run videos:fetch -- --only ${ids}`))
     process.exit(1)
   }
   log(green('\nHammasi tayyor. Frontendni qayta ishga tushiring (npm run dev) yoki build qiling.\n'))

@@ -774,6 +774,7 @@ export async function loadAppearance() {
   const row = await safe(api.settingsApi.get(), null)
   if (!row?.appearance) return
   Object.assign(appearance, DEFAULT_APPEARANCE, row.appearance)
+  normalizeVideo()
   localStorage.setItem(cacheKey(), JSON.stringify({ ...appearance }))
   applyAccent()
 }
@@ -781,6 +782,13 @@ export async function loadAppearance() {
 // ——— Video fon ———
 
 export const presetVideos = videoBackgrounds.videos
+
+// Ro'yxatdan olib tashlangan eski video saqlangan bo'lsa — birinchi videoga o'tadi
+// (aks holda video "yoqilgan", lekin hech narsa ko'rinmaydigan holat qolardi).
+function normalizeVideo() {
+  if (appearance.video && !findVideo(appearance.video)) appearance.video = presetVideos[0]?.id || ''
+}
+normalizeVideo()
 // function (const emas) — applyCardStyle() modul yuklanishida chaqiriladi
 export function findVideo(id) {
   return id ? videoBackgrounds.videos.find((v) => v.id === id) || null : null
