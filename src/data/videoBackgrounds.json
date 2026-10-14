@@ -1,0 +1,109 @@
+{
+  "_comment": "CRM fon videolari. Barcha manzillar Mixkit sahifalaridan olingan (2026-10-14 tekshirilgan). Litsenziya: Mixkit Stock Video Free License — tijoriy va shaxsiy foydalanishga ruxsat, atribut shart emas (https://mixkit.co/license/#videoFree). 'Mixkit Restricted License' ostidagi videolar (faqat shaxsiy foydalanish) ataylab qo'shilmagan. Lokal nusxalar: npm run videos:fetch -> public/videos/<id>.mp4, <id>-480.mp4, <id>.jpg",
+  "videos": [
+    {
+      "id": "china-bamboo-lanterns",
+      "label": "Bambuk o'rmoni",
+      "category": "Xitoy tabiati",
+      "description": "Bambuk o'rmonidagi qizil xitoy fonuslari",
+      "accent": "#b4232a",
+      "duration": 12,
+      "sizeMb": 4.05,
+      "page": "https://mixkit.co/free-stock-video/red-lanterns-among-bamboo-forest-100517/",
+      "src": "https://assets.mixkit.co/active_storage/video_items/100517/1725310344/100517-video-720.mp4",
+      "srcMobile": "https://assets.mixkit.co/active_storage/video_items/100517/1725310344/100517-video-360.mp4",
+      "poster": "https://assets.mixkit.co/active_storage/video_items/100517/1725310344/100517-video-thumb-720-0.jpg"
+    },
+    {
+      "id": "misty-mountains-lakes",
+      "label": "Tog'lar va ko'llar",
+      "category": "Tog'lar va ko'llar",
+      "description": "Tumanli bulutlar ostidagi tog'lar, tepaliklar va ko'llar (havodan)",
+      "accent": "#2f6f9f",
+      "duration": 10,
+      "sizeMb": 3.47,
+      "page": "https://mixkit.co/free-stock-video/aerial-tour-above-a-natural-landscape-39714/",
+      "src": "https://assets.mixkit.co/videos/39714/39714-720.mp4",
+      "srcMobile": "https://assets.mixkit.co/videos/39714/39714-360.mp4",
+      "poster": "https://assets.mixkit.co/videos/39714/39714-thumb-720-0.jpg"
+    },
+    {
+      "id": "mountain-forest-drone",
+      "label": "Tog' o'rmoni",
+      "category": "O'rmonlar",
+      "description": "Tog'lardagi yam-yashil o'rmon ustidan dron parvozi",
+      "accent": "#2f7a3e",
+      "duration": 14,
+      "sizeMb": 4.26,
+      "page": "https://mixkit.co/free-stock-video/a-drone-flights-above-a-lush-forest-in-the-mountains-50586/",
+      "src": "https://assets.mixkit.co/videos/50586/50586-720.mp4",
+      "srcMobile": "https://assets.mixkit.co/videos/50586/50586-360.mp4",
+      "poster": "https://assets.mixkit.co/videos/50586/50586-thumb-720-0.jpg"
+    },
+    {
+      "id": "foggy-forest",
+      "label": "Tumanli o'rmon",
+      "category": "O'rmonlar",
+      "description": "Tuman ichida g'oyib bo'layotgan katta yashil o'rmon",
+      "accent": "#3d6b4f",
+      "duration": 20,
+      "sizeMb": 5.65,
+      "page": "https://mixkit.co/free-stock-video/forest-disappearing-in-the-fog-2221/",
+      "src": "https://assets.mixkit.co/videos/2221/2221-720.mp4",
+      "srcMobile": "https://assets.mixkit.co/videos/2221/2221-360.mp4",
+      "poster": "https://assets.mixkit.co/videos/2221/2221-thumb-720-0.jpg"
+    },
+    {
+      "id": "chinatown-night",
+      "label": "Chinatown kechasi",
+      "category": "Shaharlar",
+      "description": "Kechki Chinatown: osma bezaklar va piyodalar",
+      "accent": "#c2410c",
+      "duration": 5,
+      "sizeMb": 1.81,
+      "page": "https://mixkit.co/free-stock-video/chinatown-at-night-time-4261/",
+      "src": "https://assets.mixkit.co/videos/4261/4261-720.mp4",
+      "srcMobile": "https://assets.mixkit.co/videos/4261/4261-360.mp4",
+      "poster": "https://assets.mixkit.co/videos/4261/4261-thumb-720-0.jpg"
+    },
+    {
+      "id": "night-skyscrapers",
+      "label": "Tungi osmono'parlar",
+      "category": "Shaharlar",
+      "description": "Kechasi zamonaviy shahar osmono'parlari orasidan parvoz",
+      "accent": "#3b4fb8",
+      "duration": 30,
+      "sizeMb": 9.35,
+      "page": "https://mixkit.co/free-stock-video/flying-between-the-skyscrapers-of-a-city-at-night-42345/",
+      "src": "https://assets.mixkit.co/videos/42345/42345-720.mp4",
+      "srcMobile": "https://assets.mixkit.co/videos/42345/42345-360.mp4",
+      "poster": "https://assets.mixkit.co/videos/42345/42345-thumb-720-0.jpg"
+    },
+    {
+      "id": "bmw-parking",
+      "label": "BMW",
+      "category": "BMW",
+      "description": "Bulutli kunda to'xtab turgan BMW avtomobili",
+      "accent": "#1c69d4",
+      "duration": 12,
+      "sizeMb": 3.4,
+      "page": "https://mixkit.co/free-stock-video/bmw-in-a-parking-lot-3527/",
+      "src": "https://assets.mixkit.co/videos/3527/3527-720.mp4",
+      "srcMobile": "https://assets.mixkit.co/videos/3527/3527-360.mp4",
+      "poster": "https://assets.mixkit.co/videos/3527/3527-thumb-720-0.jpg"
+    },
+    {
+      "id": "bmw-interior",
+      "label": "BMW salonidan",
+      "category": "BMW",
+      "description": "BMW salonining ichki ko'rinishi (yo'lovchi oynasidan)",
+      "accent": "#1c69d4",
+      "duration": 16,
+      "sizeMb": 4.66,
+      "page": "https://mixkit.co/free-stock-video/inside-a-bmw-car-3529/",
+      "src": "https://assets.mixkit.co/videos/3529/3529-720.mp4",
+      "srcMobile": "https://assets.mixkit.co/videos/3529/3529-360.mp4",
+      "poster": "https://assets.mixkit.co/videos/3529/3529-thumb-720-0.jpg"
+    }
+  ]
+}

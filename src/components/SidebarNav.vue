@@ -2,13 +2,14 @@
 import { computed } from 'vue'
 import AppIcon from './AppIcon.vue'
 import BrandLogo from './BrandLogo.vue'
-import { appearance, canSee, leadCounts } from '@/store'
+import { appearance, canSee, leadCounts, hasMediaBackground } from '@/store'
 
 defineProps({ open: Boolean, collapsed: Boolean })
 defineEmits(['close', 'toggle-collapse'])
 
 // Fon rasmi tanlansa — sidebar shaffof bo'ladi va rasm ostidan ko'rinadi
-const glass = computed(() => appearance.mode === 'image' && !!appearance.image)
+// Rasm yoki video fon bo'lsa — shaffof "shisha" ko'rinish
+const glass = computed(() => hasMediaBackground.value)
 
 // `page` kaliti backenddagi ROLE_PAGES bilan bir xil.
 // Rolga yopiq bo'lim navbarda umuman ko'rinmaydi (backend ham tekshiradi).

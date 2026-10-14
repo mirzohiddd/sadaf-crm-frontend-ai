@@ -7,14 +7,15 @@ import CalendarPanel from './CalendarPanel.vue'
 import TasksPanel from './TasksPanel.vue'
 import NotificationsPanel from './NotificationsPanel.vue'
 import UserAvatar from './UserAvatar.vue'
-import { db, auth, signOut, appearance, roleLabel, unreadCount, callCenter, openCallCenter } from '@/store'
+import { db, auth, signOut, appearance, roleLabel, unreadCount, callCenter, openCallCenter, hasMediaBackground } from '@/store'
 
 defineProps({ title: String, subtitle: String })
 defineEmits(['toggle-sidebar'])
 
 const router = useRouter()
 
-const glass = computed(() => appearance.mode === 'image' && !!appearance.image)
+// Rasm yoki video fon bo'lsa — shaffof "shisha" ko'rinish
+const glass = computed(() => hasMediaBackground.value)
 
 // Bir vaqtda faqat bitta panel ochiq turadi
 const panel = ref(null)

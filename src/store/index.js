@@ -2,6 +2,7 @@ import { reactive, computed } from 'vue'
 import * as api from '@/api'
 import { onUnauthorized, tokenStore } from '@/api'
 import { connectRealtime, disconnectRealtime } from '@/ws'
+import videoBackgrounds from '@/data/videoBackgrounds.json'
 
 // ————————————————————————————————————————————————
 //  Markaziy holat
@@ -682,7 +683,11 @@ const DEFAULT_APPEARANCE = {
   imageSrcset: '',
   dim: 0,
   accent: DEFAULT_ACCENT,
-  cardSolidity: 82
+  cardSolidity: 82,
+  // Video fon: tanlangan video ID va yoqilgan/o'chirilganligi.
+  // O'chirilsa — oldingi rang yoki rasm foni avvalgidek ko'rinadi.
+  video: '',
+  videoEnabled: false
 }
 
 const cacheKey = () => `sadaf_appearance:${auth.user?.login || 'guest'}`
@@ -712,7 +717,8 @@ function shade(hex, amt) {
 // Fon rasmi rejimida kartalar biroz shaffof bo'ladi ("shisha" effekti).
 function applyCardStyle() {
   const root = document.documentElement
-  const onImage = appearance.mode === 'image' && !!appearance.image
+  // Video fon ham rasm kabi "shisha" kartalar bilan ko'rsatiladi
+  const onImage = (appearance.mode === 'image' && !!appearance.image) || !!findVideo(appearance.videoEnabled && appearance.video)
 
   if (!onImage) {
     root.style.setProperty('--card-bg', '#ffffff')
@@ -770,6 +776,54 @@ export async function loadAppearance() {
   Object.assign(appearance, DEFAULT_APPEARANCE, row.appearance)
   localStorage.setItem(cacheKey(), JSON.stringify({ ...appearance }))
   applyAccent()
+}
+
+// ——— Video fon ———
+
+export const presetVideos = videoBackgrounds.videos
+// function (const emas) — applyCardStyle() modul yuklanishida chaqiriladi
+export function findVideo(id) {
+  return id ? videoBackgrounds.videos.find((v) => v.id === id) || null : null
+}
+
+// Hozir fonda o'ynashi kerak bo'lgan video (yoqilgan va mavjud bo'lsa)
+export const activeVideo = computed(() => (appearance.videoEnabled ? findVideo(appearance.video) : null))
+
+// Fonda rasm yoki video bormi — sidebar/navbar "shisha" ko'rinishi shunga qaraydi
+export const hasMediaBackground = computed(() =>
+  (appearance.mode === 'image' && !!appearance.image) || !!activeVideo.value)
+
+// Fon videosining joriy holati (saqlanmaydi, faqat ko'rsatish uchun):
+// idle | loading | playing | poster (faqat rasm: tejamkor rejim) | error
+export const videoState = reactive({ status: 'idle', source: '', reason: '' })
+
+export function pickVideo(v) {
+  if (!v) return
+  saveAppearance({ video: v.id, videoEnabled: true, accent: v.accent || appearance.accent })
+}
+
+export function setVideoEnabled(on) {
+  if (on && !findVideo(appearance.video)) return pickVideo(presetVideos[0])
+  saveAppearance({ videoEnabled: !!on })
+}
+
+/** Ro'yxatdagi keyingi videoga almashtirish (oxiridan keyin — boshiga). */
+export function nextVideo() {
+  const i = presetVideos.findIndex((v) => v.id === appearance.video)
+  pickVideo(presetVideos[(i + 1) % presetVideos.length])
+}
+
+// public/videos/manifest.json — `npm run videos:fetch` skripti yaratadi.
+// Fayl bo'lmasa (yoki SPA index.html qaytsa) — videolar Mixkit'dan o'qiladi.
+let manifestPromise = null
+export function loadVideoManifest() {
+  if (!manifestPromise) {
+    manifestPromise = fetch('/videos/manifest.json', { cache: 'no-cache' })
+      .then((r) => (r.ok && (r.headers.get('content-type') || '').includes('json') ? r.json() : null))
+      .then((m) => (m && typeof m.videos === 'object' ? m.videos : {}))
+      .catch(() => ({}))
+  }
+  return manifestPromise
 }
 
 export function pickWallpaper(w) {
