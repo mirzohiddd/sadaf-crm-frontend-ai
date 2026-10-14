@@ -302,6 +302,11 @@ function reminderOverdue(r) {
 // leadlarning ko'rinishi o'zgarmaydi).
 const isBlank = (v) => v === null || v === undefined || v === ''
 const amountText = (v) => (isBlank(v) ? '—' : money(v))
+// Lead faqat hodimlarga biriktiriladi — Bosh menejer (super_admin) ro'yxatda yo'q,
+// u barcha hodimlarning leadlarini kuzatib boradi.
+const leadWorkers = computed(() =>
+  db.employees.filter((e) => (e.crmRole || e.role) !== 'super_admin' && e.active !== false))
+
 const tourText = (l) => [l.tour || '—', isBlank(l.people) ? '' : `${l.people} kishi`].filter(Boolean).join(' · ')
 
 const detailRows = computed(() => {
@@ -378,17 +383,15 @@ const exportColumns = computed(() => [
       <!-- Sana oralig'i: lead target'dan (yoki boshqa manbadan) HAQIQATAN kelgan kun -->
       <div class="relative flex items-end gap-2">
         <label class="flex flex-col gap-0.5">
-          <span class="whitespace-nowrap text-[11px] font-medium leading-none text-slate-500">Boshlanish sanasi</span>
-          <input v-model="dateFrom" type="date" :max="dateTo || undefined" aria-label="Boshlanish sanasi"
-            class="field w-[148px] py-1.5 text-sm" :class="dateError ? 'border-rose-400 ring-1 ring-rose-300' : ''" />
+          <input v-model="dateFrom" type="date" :max="dateTo || undefined" aria-label="Boshlanish sanasi" title="Boshlanish sanasi"
+            class="field w-[148px] text-sm" :class="dateError ? 'border-rose-400 ring-1 ring-rose-300' : ''" />
         </label>
         <label class="flex flex-col gap-0.5">
-          <span class="whitespace-nowrap text-[11px] font-medium leading-none text-slate-500">Tugash sanasi</span>
-          <input v-model="dateTo" type="date" :min="dateFrom || undefined" aria-label="Tugash sanasi"
-            class="field w-[148px] py-1.5 text-sm" :class="dateError ? 'border-rose-400 ring-1 ring-rose-300' : ''" />
+          <input v-model="dateTo" type="date" :min="dateFrom || undefined" aria-label="Tugash sanasi" title="Tugash sanasi"
+            class="field w-[148px] text-sm" :class="dateError ? 'border-rose-400 ring-1 ring-rose-300' : ''" />
         </label>
         <button v-if="dateFrom || dateTo" type="button" title="Sana filtrini tozalash" aria-label="Sana filtrini tozalash"
-          class="mb-0.5 grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          class="mb-1 grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
           @click="clearDates">
           <AppIcon name="close" class="h-4 w-4" />
         </button>
@@ -770,7 +773,8 @@ const exportColumns = computed(() => [
         <FormField v-if="isSuperAdmin" label="6. Mas'ul menejer">
           <select v-model="form.manager" class="field">
             <option value="">Tanlanmagan</option>
-            <option v-for="e in db.employees" :key="e.id" :value="e.name">{{ e.name }}</option>
+            <option v-for="e in leadWorkers" :key="e.id" :value="e.name">{{ e.name }}</option>
+            <option v-if="form.manager && !leadWorkers.some((e) => e.name === form.manager)" :value="form.manager" disabled>{{ form.manager }}</option>
           </select>
         </FormField>
 

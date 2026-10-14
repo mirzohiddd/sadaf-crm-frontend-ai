@@ -8,16 +8,23 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import ToolbarButton from '@/components/ToolbarButton.vue'
 import TablePagination from '@/components/TablePagination.vue'
 import AppIcon from '@/components/AppIcon.vue'
+import RowActions from '@/components/RowActions.vue'
 import { db, toursApi } from '@/store'
 import { tourStatuses, countryFlags } from '@/data/mock.js'
 import { tourDestinations, destinationFlags, TOUR_TYPES } from '@/data/countries.js'
-import { money, exportCsv } from '@/utils/format.js'
+import { exportCsv, som, somShort, money, tourPrice, isSomTour, isoToUz } from '@/utils/format.js'
 
 const PER_PAGE = 6
 const page = ref(1)
 const query = ref('')
 const countryFilter = ref('')
 const statusFilter = ref('')
+
+// Ko'rinish: kartalar yoki ro'yxat (jadval). Tanlov brauzerda eslab qolinadi.
+const VIEW_KEY = 'sadaf_tours_view'
+const readView = () => { try { return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'cards' } catch { return 'cards' } }
+const view = ref(readView())
+watch(view, (v) => { try { localStorage.setItem(VIEW_KEY, v) } catch { /* ruxsat yo'q — e'tiborsiz */ } })
 
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase()
@@ -44,13 +51,25 @@ const formDestinationOptions = computed(() => [...destinationOptions.value, ...e
 
 const paged = computed(() => filtered.value.slice((page.value - 1) * PER_PAGE, page.value * PER_PAGE))
 
+// Narx ko'rsatkichlari faqat so'mdagi turlar bo'yicha hisoblanadi —
+// eski (USD dagi) turlar so'm bilan aralashtirilmaydi.
 const metrics = computed(() => {
   const all = db.tours
+  const somTours = all.filter(isSomTour)
   const seats = all.reduce((s, t) => s + Number(t.seats || 0), 0)
-  const avg = all.length ? Math.round(all.reduce((s, t) => s + Number(t.price || 0), 0) / all.length) : 0
-  const revenue = all.reduce((s, t) => s + Number(t.price || 0) * Number(t.seats || 0), 0)
+  const avg = somTours.length ? Math.round(somTours.reduce((s, t) => s + Number(t.price || 0), 0) / somTours.length) : 0
+  const revenue = somTours.reduce((s, t) => s + Number(t.price || 0) * Number(t.seats || 0), 0)
   return { total: all.length, active: all.filter((t) => t.status === 'Faol').length, seats, avg, revenue }
 })
+
+// Ketish sanasi: yangi turlarda departureDate, eski muddatli turlarda startDate.
+const departureOf = (t) => t?.departureDate || t?.startDate || ''
+const todayIso = () => {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+const isPast = (t) => !!departureOf(t) && departureOf(t) < todayIso()
 
 // Har bir tur uchun barqaror rangli muqova (rasm o'rniga)
 const covers = [
@@ -66,9 +85,11 @@ const seatWidth = (t) => Math.min(100, (Number(t.seats) / 20) * 100) + '%'
 // ——— Modal / forma ———
 
 const emptyForm = () => ({
-  id: null, tourType: 'Doimiy', name: '', country: '', days: '', price: '', extraPrice: '', seats: '', status: '',
-  startDate: '', endDate: '', description: '', image: ''
+  id: null, tourType: 'Doimiy', name: '', country: '', departureDate: '', days: '', price: '', extraPrice: '',
+  seats: '', status: 'Faol', startDate: '', endDate: '', description: '', image: ''
 })
+// Tahrirlanayotgan tur avval USD da saqlangan bo'lsa — eski narx eslatma sifatida ko'rsatiladi
+const legacyPrice = ref('')
 const isDated = computed(() => form.tourType === 'Muddatli')
 
 const modalOpen = ref(false)
@@ -80,6 +101,7 @@ const clearErrors = () => Object.keys(errors).forEach((k) => delete errors[k])
 
 function openCreate() {
   Object.assign(form, emptyForm())
+  legacyPrice.value = ''
   imageName.value = ''
   clearErrors()
   modalOpen.value = true
@@ -88,12 +110,18 @@ function openCreate() {
 function openEdit(row) {
   // Avval bo'sh forma — oldingi turdan qolgan maydonlar (rasm, sana) aralashmasin.
   // Tur turi saqlanmagan eski turlar "Doimiy" hisoblanadi.
+  // Valyutasi yozilmagan eski turlarning narxi USD da — so'mda qayta kiritiladi.
+  const somRow = isSomTour(row)
   Object.assign(form, emptyForm(), { ...row }, {
     tourType: row.tourType === 'Muddatli' ? 'Muddatli' : 'Doimiy',
-    extraPrice: row.extraPrice ?? '',
+    departureDate: departureOf(row),
+    days: row.days ?? '',
+    price: somRow ? row.price ?? '' : '',
+    extraPrice: somRow ? row.extraPrice ?? '' : '',
     startDate: row.startDate || '',
     endDate: row.endDate || ''
   })
+  legacyPrice.value = !somRow && Number(row.price) > 0 ? money(row.price) : ''
   imageName.value = ''
   clearErrors()
   modalOpen.value = true
@@ -102,21 +130,26 @@ function openEdit(row) {
 function setTourType(type) {
   form.tourType = type
   if (type !== 'Muddatli') {
-    form.startDate = ''
     form.endDate = ''
-    delete errors.startDate
     delete errors.endDate
   }
 }
 
-// Ikkala sana tanlansa — davomiylik (kun) avtomatik hisoblanadi (keyin qo'lda o'zgartirsa bo'ladi).
-watch(() => [form.startDate, form.endDate], ([start, end]) => {
+// Ketish va qaytish sanalari tanlansa — davomiylik (kun) avtomatik hisoblanadi (keyin qo'lda o'zgartirsa bo'ladi).
+watch(() => [form.departureDate, form.endDate], ([start, end]) => {
   if (!isDated.value || !start || !end) return
   const days = Math.round((new Date(end) - new Date(start)) / 86400000) + 1
   if (days > 0) form.days = days
 })
 
-const shortDate = (iso) => (iso ? iso.split('-').reverse().join('.') : '')
+// Foydalanuvchi maydonni tuzatishni boshlasa — shu maydonning xato xabari yo'qoladi
+watch(() => ({ ...form }), (now, before) => {
+  Object.keys(now).forEach((k) => { if (k !== 'image' && now[k] !== before[k]) delete errors[k] })
+})
+
+const shortDate = isoToUz
+// Kiritilayotgan narxning o'qilishi oson ko'rinishi: 12500000 → 12 500 000 so'm
+const priceHint = computed(() => (Number(form.price) > 0 ? som(form.price) : "Narxni so'mda kiriting"))
 
 function onImagePick(e) {
   const file = e.target.files?.[0]
@@ -148,35 +181,42 @@ function validate() {
   if (keep) errors.image = keep
   if (!form.name.trim()) errors.name = 'Tur nomini kiriting.'
   if (!form.country) errors.country = "Yo'nalishni tanlang."
-  if (!(Number(form.days) > 0)) errors.days = 'Davomiylikni kun hisobida kiriting.'
-  if (!(Number(form.price) > 0)) errors.price = 'Narxni kiriting.'
+  if (!form.departureDate) errors.departureDate = 'Ketish sanasini tanlang.'
+  if (form.days !== '' && form.days !== null && !(Number(form.days) > 0)) errors.days = 'Davomiylikni kun hisobida kiriting.'
+  if (!(Number(form.price) > 0)) errors.price = "Narxni so'mda kiriting."
   if (form.extraPrice !== '' && form.extraPrice !== null && !(Number(form.extraPrice) >= 0)) {
     errors.extraPrice = "Qo'shimcha narx manfiy bo'lmasin."
   }
   if (isDated.value) {
-    if (!form.startDate) errors.startDate = 'Boshlanish sanasini tanlang.'
-    if (!form.endDate) errors.endDate = 'Tugash sanasini tanlang.'
-    else if (form.startDate && form.endDate < form.startDate) errors.endDate = "Tugash sanasi boshlanishdan oldin bo'lmasin."
+    if (!form.endDate) errors.endDate = 'Qaytish sanasini tanlang.'
+    else if (form.departureDate && form.endDate < form.departureDate) errors.endDate = "Qaytish sanasi ketish sanasidan oldin bo'lmasin."
   }
   if (form.seats === '' || Number(form.seats) < 0) errors.seats = "Bo'sh joylar sonini kiriting."
   if (!form.status) errors.status = 'Holatni tanlang.'
   return !Object.keys(errors).length
 }
 
-function save() {
-  if (!validate()) return
+const saving = ref(false)
+
+async function save() {
+  if (saving.value || !validate()) return
   const payload = {
     ...form,
-    days: Number(form.days),
-    price: Number(form.price),
+    name: form.name.trim(),
+    days: form.days === '' || form.days === null ? null : Number(form.days),
+    price: Math.round(Number(form.price)),
+    currency: 'UZS',
     seats: Number(form.seats),
-    extraPrice: form.extraPrice === '' || form.extraPrice === null ? null : Number(form.extraPrice),
-    // Doimiy turda sanalar saqlanmaydi (tahrirlashda ham tozalanadi)
-    startDate: isDated.value ? form.startDate : '',
+    extraPrice: form.extraPrice === '' || form.extraPrice === null ? null : Math.round(Number(form.extraPrice)),
+    // Muddatli turda boshlanish = ketish sanasi; doimiy turda qaytish sanasi saqlanmaydi
+    startDate: isDated.value ? form.departureDate : '',
     endDate: isDated.value ? form.endDate : ''
   }
-  form.id ? toursApi.update(payload) : toursApi.add(payload)
-  modalOpen.value = false
+  saving.value = true
+  const row = await (form.id ? toursApi.update(payload) : toursApi.add(payload))
+  saving.value = false
+  // Server xato qaytarsa forma ochiq qoladi — kiritilgan ma'lumot yo'qolmaydi
+  if (row) modalOpen.value = false
 }
 
 // ——— Ko'rish va o'chirish ———
@@ -184,18 +224,23 @@ function save() {
 const viewing = ref(null)
 const toDelete = ref(null)
 
-function confirmDelete() {
-  toursApi.remove(toDelete.value.id)
+async function confirmDelete() {
+  const id = toDelete.value.id
   toDelete.value = null
+  await toursApi.remove(id)
   const maxPage = Math.max(1, Math.ceil(filtered.value.length / PER_PAGE))
   if (page.value > maxPage) page.value = maxPage
 }
 
 const exportColumns = [
   { key: 'name', label: 'Tur nomi' }, { key: 'country', label: "Yo'nalish" },
-  { key: 'days', label: 'Kun' }, { key: 'price', label: 'Narx (USD)' },
+  { key: 'departure', label: 'Ketish sanasi' }, { key: 'days', label: 'Kun' },
+  { key: 'price', label: 'Narx' }, { key: 'currency', label: 'Valyuta' },
   { key: 'seats', label: "Bo'sh joy" }, { key: 'status', label: 'Holat' }
 ]
+const exportRows = () => filtered.value.map((t) => ({
+  ...t, departure: shortDate(departureOf(t)), currency: isSomTour(t) ? "so'm" : 'USD'
+}))
 </script>
 
 <template>
@@ -205,8 +250,8 @@ const exportColumns = [
       <MetricTile label="Jami turlar" :value="metrics.total" unit="ta" note="Barcha tur paketlari" icon="bag" color="blue" />
       <MetricTile label="Faol turlar" :value="metrics.active" unit="ta" note="Sotuvda" icon="plane" color="green" />
       <MetricTile label="Bo'sh joylar" :value="metrics.seats" unit="ta" note="Jami bo'sh joylar" icon="users" color="amber" />
-      <MetricTile label="O'rtacha narx" :value="money(metrics.avg)" note="Bir tur uchun" icon="dollar" color="violet" />
-      <MetricTile label="Potensial daromad" :value="money(metrics.revenue)" note="Barcha joylar sotilsa" icon="chart" color="teal" />
+      <MetricTile label="O'rtacha narx" :value="somShort(metrics.avg).value" :unit="somShort(metrics.avg).unit" note="Bir tur uchun" icon="dollar" color="violet" />
+      <MetricTile label="Potensial daromad" :value="somShort(metrics.revenue).value" :unit="somShort(metrics.revenue).unit" note="Barcha joylar sotilsa" icon="chart" color="teal" />
     </div>
 
     <!-- Asboblar paneli -->
@@ -226,14 +271,63 @@ const exportColumns = [
         <option v-for="s in tourStatuses" :key="s" :value="s">{{ s }}</option>
       </select>
 
-      <div class="ml-auto flex gap-3">
-        <ToolbarButton icon="download" @click="exportCsv('turlar.csv', exportColumns, filtered)">Export</ToolbarButton>
+      <div class="ml-auto flex flex-wrap gap-3">
+        <div class="flex overflow-hidden rounded-xl border border-slate-200" role="group" aria-label="Ko'rinish">
+          <button class="flex items-center gap-2 px-4 py-2.5 text-sm font-medium"
+            :class="view === 'cards' ? 'bg-slate-100 text-slate-900' : 'bg-white text-slate-600'"
+            :aria-pressed="view === 'cards'" @click="view = 'cards'">
+            <AppIcon name="layers" class="h-4 w-4" /> Kartalar
+          </button>
+          <button class="flex items-center gap-2 border-l border-slate-200 px-4 py-2.5 text-sm font-medium"
+            :class="view === 'list' ? 'bg-slate-100 text-slate-900' : 'bg-white text-slate-600'"
+            :aria-pressed="view === 'list'" @click="view = 'list'">
+            <AppIcon name="bars" class="h-4 w-4" /> Ro'yxat
+          </button>
+        </div>
+        <ToolbarButton icon="download" @click="exportCsv('turlar.csv', exportColumns, exportRows())">Export</ToolbarButton>
         <ToolbarButton icon="plus" variant="primary" @click="openCreate">Yangi tur</ToolbarButton>
       </div>
     </div>
 
     <!-- Turlar kartalari -->
-    <div v-if="paged.length" class="stagger grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+    <!-- Ro'yxat (jadval) ko'rinishi -->
+    <div v-if="paged.length && view === 'list'" class="card overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full min-w-[860px] text-sm">
+          <thead>
+            <tr class="border-b border-slate-100 bg-slate-50/70 text-left text-xs uppercase tracking-wide text-slate-500">
+              <th class="px-5 py-3 font-medium">Tur nomi</th>
+              <th class="px-5 py-3 font-medium">Yo'nalish</th>
+              <th class="px-5 py-3 font-medium">Ketish sanasi</th>
+              <th class="px-5 py-3 text-right font-medium">Narx</th>
+              <th class="px-5 py-3 text-right font-medium">Bo'sh joy</th>
+              <th class="px-5 py-3 font-medium">Holat</th>
+              <th class="px-5 py-3 text-right font-medium">Amallar</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="t in paged" :key="t.id" class="border-b border-slate-50 last:border-0 hover:bg-slate-50/60">
+              <td class="px-5 py-3.5">
+                <span class="block font-medium text-slate-900">{{ t.name }}</span>
+                <span v-if="t.days" class="block text-xs text-slate-400">{{ t.days }} kun</span>
+              </td>
+              <td class="px-5 py-3.5 text-slate-600">{{ flagOf(t.country) }} {{ t.country }}</td>
+              <td class="px-5 py-3.5" :class="isPast(t) ? 'text-slate-400' : 'text-slate-600'">
+                {{ shortDate(departureOf(t)) || '—' }}
+              </td>
+              <td class="whitespace-nowrap px-5 py-3.5 text-right font-semibold text-slate-900">{{ tourPrice(t) }}</td>
+              <td class="px-5 py-3.5 text-right" :class="Number(t.seats) === 0 ? 'text-rose-600' : 'text-slate-600'">{{ t.seats }} ta</td>
+              <td class="px-5 py-3.5"><StatusBadge :status="t.status" /></td>
+              <td class="px-5 py-3.5">
+                <RowActions view @view="viewing = t" @edit="openEdit(t)" @remove="toDelete = t" />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div v-else-if="paged.length" class="stagger grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
       <article v-for="t in paged" :key="t.id" class="card lift group flex flex-col overflow-hidden">
         <!-- Muqova -->
         <div class="relative h-36 bg-gradient-to-br" :class="t.image ? '' : cover(t.name)">
@@ -252,7 +346,7 @@ const exportColumns = [
           </span>
 
           <span class="absolute bottom-3 right-3 rounded-lg bg-slate-900/70 px-2.5 py-1 text-sm font-semibold text-white backdrop-blur">
-            {{ money(t.price) }}
+            {{ tourPrice(t) }}
           </span>
         </div>
 
@@ -263,10 +357,16 @@ const exportColumns = [
             {{ t.description || 'Tavsif kiritilmagan.' }}
           </p>
 
-          <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+          <dl class="mt-4 grid grid-cols-3 gap-2 text-sm">
+            <div class="rounded-xl bg-slate-50 px-3 py-2.5">
+              <dt class="text-xs text-slate-500">Ketish sanasi</dt>
+              <dd class="mt-0.5 font-semibold" :class="isPast(t) ? 'text-slate-400' : 'text-slate-900'">
+                {{ shortDate(departureOf(t)) || '—' }}
+              </dd>
+            </div>
             <div class="rounded-xl bg-slate-50 px-3 py-2.5">
               <dt class="text-xs text-slate-500">Davomiyligi</dt>
-              <dd class="mt-0.5 font-semibold text-slate-900">{{ t.days }} kun</dd>
+              <dd class="mt-0.5 font-semibold text-slate-900">{{ t.days ? `${t.days} kun` : '—' }}</dd>
             </div>
             <div class="rounded-xl bg-slate-50 px-3 py-2.5">
               <dt class="text-xs text-slate-500">Bo'sh joy</dt>
@@ -318,6 +418,7 @@ const exportColumns = [
 
     <!-- Yangi / tahrirlash -->
     <ModalDialog :open="modalOpen" :title="form.id ? 'Turni tahrirlash' : 'Yangi tur qo\'shish'"
+                 :submit-disabled="saving"
                  @close="modalOpen = false" @submit="save">
       <!-- Tur turi -->
       <div class="mb-5">
@@ -346,26 +447,28 @@ const exportColumns = [
           </select>
         </FormField>
 
-        <template v-if="isDated">
-          <FormField label="Boshlanish sanasi" required :error="errors.startDate">
-            <input v-model="form.startDate" type="date" class="field" />
-          </FormField>
+        <FormField label="Ketish sanasi" required :error="errors.departureDate">
+          <input v-model="form.departureDate" type="date" class="field" />
+        </FormField>
 
-          <FormField label="Tugash sanasi" required :error="errors.endDate">
-            <input v-model="form.endDate" type="date" :min="form.startDate || undefined" class="field" />
-          </FormField>
-        </template>
+        <FormField label="Narxi (so'm)" required :error="errors.price"
+                   :hint="legacyPrice ? `Avvalgi narx: ${legacyPrice} — so'mda qayta kiriting` : priceHint">
+          <input v-model="form.price" type="number" min="0" step="1000" inputmode="numeric" class="field"
+                 placeholder="Masalan: 12500000" />
+        </FormField>
 
-        <FormField label="Davomiyligi (kun)" required :error="errors.days">
+        <FormField v-if="isDated" label="Qaytish sanasi" required :error="errors.endDate">
+          <input v-model="form.endDate" type="date" :min="form.departureDate || undefined" class="field" />
+        </FormField>
+
+        <FormField label="Davomiyligi (kun)" :error="errors.days">
           <input v-model="form.days" type="number" min="1" class="field" placeholder="Masalan: 8" />
         </FormField>
 
-        <FormField label="Narxi (USD)" required :error="errors.price">
-          <input v-model="form.price" type="number" min="0" class="field" placeholder="Masalan: 1850" />
-        </FormField>
-
-        <FormField label="Qo'shimcha narx (USD)" :error="errors.extraPrice" hint="Agar mavjud bo'lsa">
-          <input v-model="form.extraPrice" type="number" min="0" class="field" placeholder="Masalan: 150" />
+        <FormField label="Qo'shimcha narx (so'm)" :error="errors.extraPrice"
+                   :hint="Number(form.extraPrice) > 0 ? som(form.extraPrice) : 'Agar mavjud bo\'lsa'">
+          <input v-model="form.extraPrice" type="number" min="0" step="1000" inputmode="numeric" class="field"
+                 placeholder="Masalan: 1500000" />
         </FormField>
 
         <FormField label="Bo'sh joylar soni" required :error="errors.seats">
@@ -420,13 +523,13 @@ const exportColumns = [
         <dl class="grid grid-cols-2 gap-4 text-sm">
           <div><dt class="text-slate-500">Tur turi</dt><dd class="font-medium text-slate-900">{{ viewing.tourType === 'Muddatli' ? 'Muddatli tur' : 'Doimiy tur' }}</dd></div>
           <div><dt class="text-slate-500">Yo'nalish</dt><dd class="font-medium text-slate-900">{{ flagOf(viewing.country) }} {{ viewing.country }}</dd></div>
-          <div v-if="viewing.tourType === 'Muddatli' && viewing.startDate" class="col-span-2">
-            <dt class="text-slate-500">Sanalar</dt>
-            <dd class="font-medium text-slate-900">{{ shortDate(viewing.startDate) }} — {{ shortDate(viewing.endDate) }}</dd>
+          <div><dt class="text-slate-500">Ketish sanasi</dt><dd class="font-medium text-slate-900">{{ shortDate(departureOf(viewing)) || '—' }}</dd></div>
+          <div v-if="viewing.tourType === 'Muddatli' && viewing.endDate">
+            <dt class="text-slate-500">Qaytish sanasi</dt><dd class="font-medium text-slate-900">{{ shortDate(viewing.endDate) }}</dd>
           </div>
-          <div><dt class="text-slate-500">Davomiyligi</dt><dd class="font-medium text-slate-900">{{ viewing.days }} kun</dd></div>
-          <div><dt class="text-slate-500">Narxi</dt><dd class="font-medium text-slate-900">{{ money(viewing.price) }}</dd></div>
-          <div v-if="viewing.extraPrice"><dt class="text-slate-500">Qo'shimcha narx</dt><dd class="font-medium text-slate-900">{{ money(viewing.extraPrice) }}</dd></div>
+          <div><dt class="text-slate-500">Davomiyligi</dt><dd class="font-medium text-slate-900">{{ viewing.days ? `${viewing.days} kun` : '—' }}</dd></div>
+          <div><dt class="text-slate-500">Narxi</dt><dd class="font-medium text-slate-900">{{ tourPrice(viewing) }}</dd></div>
+          <div v-if="viewing.extraPrice"><dt class="text-slate-500">Qo'shimcha narx</dt><dd class="font-medium text-slate-900">{{ tourPrice(viewing, viewing.extraPrice) }}</dd></div>
           <div><dt class="text-slate-500">Bo'sh joy</dt><dd class="font-medium text-slate-900">{{ viewing.seats }} ta</dd></div>
         </dl>
         <p class="text-sm text-slate-600">{{ viewing.description || 'Tavsif kiritilmagan.' }}</p>

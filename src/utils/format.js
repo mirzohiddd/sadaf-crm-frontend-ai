@@ -32,3 +32,24 @@ export function exportCsv(filename, columns, rows) {
   a.click()
   URL.revokeObjectURL(url)
 }
+
+// So'mdagi summa: 12 500 000 so'm
+export const som = (n) =>
+  Math.round(Number(n || 0)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + " so'm"
+
+// Tur narxi: yangi turlar so'mda (currency: 'UZS'); valyutasi yozilmagan
+// eski turlar USD da saqlangan — ular avvalgidek "$" bilan ko'rsatiladi.
+export const isSomTour = (t) => t?.currency === 'UZS'
+export const tourPrice = (t, n = t?.price) => (isSomTour(t) ? som(n) : money(n))
+
+// ISO sana (2026-11-20) → 20.11.2026
+export const isoToUz = (iso) => (iso ? String(iso).split('-').reverse().join('.') : '')
+
+// Ixcham so'm (ko'rsatkich kartalari uchun): 12 500 000 → { value: '12,5', unit: "mln so'm" }
+export const somShort = (n) => {
+  const v = Math.round(Number(n || 0))
+  const fmt = (x) => String(Math.round(x * 10) / 10).replace('.', ',')
+  if (Math.abs(v) >= 1e9) return { value: fmt(v / 1e9), unit: "mlrd so'm" }
+  if (Math.abs(v) >= 1e6) return { value: fmt(v / 1e6), unit: "mln so'm" }
+  return { value: som(v).replace(" so'm", ''), unit: "so'm" }
+}
